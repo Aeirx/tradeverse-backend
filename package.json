@@ -1,0 +1,31 @@
+{
+  "name": "tradeverse-backend",
+  "version": "1.0.0",
+  "description": "Backend API for TradeVerse - A Crypto Trading Simulator",
+  "keywords": [
+    "tradeverse"
+  ],
+  "license": "ISC",
+  "author": "Aeirx",
+  "type": "module",
+  "main": "src/index.js",
+  "scripts": {
+    "dev": "nodemon -r dotenv/config --experimental-json-modules src/index.js"
+  },
+  "dependencies": {
+    "bcrypt": "^6.0.0",
+    "cloudinary": "^2.9.0",
+    "cookie-parser": "^1.4.7",
+    "cors": "^2.8.5",
+    "dotenv": "^16.6.1",
+    "express": "^4.22.1",
+    "jsonwebtoken": "^9.0.3",
+    "mongoose": "^8.23.0",
+    "mongoose-aggregate-paginate-v2": "^1.1.2",
+    "multer": "^2.1.1"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.11",
+    "prettier": "^3.4.2"
+  }
+}
