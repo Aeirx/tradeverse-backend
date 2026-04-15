@@ -24,4 +24,11 @@ router.route("/login").post(loginUser);
 // Secured routes
 router.route("/logout").post(verifyJWT, logoutUser);
 router.route("/wallet/add").post(verifyJWT, addMoneyToWallet);
+router.route("/balance").get(verifyJWT, (req, res) => {
+  // This endpoint is for the React UI to fetch the user's current wallet balance and portfolio
+  res.status(200).json({
+    walletBalance: req.user?.walletBalance || 100000,
+    portfolio: req.user?.portfolio || [],
+  });
+});
 export default router;

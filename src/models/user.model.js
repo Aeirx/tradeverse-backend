@@ -2,6 +2,13 @@ import mongoose, { Schema } from "mongoose";
 import jwt from "jsonwebtoken";
 import bcrypt from "bcrypt";
 
+// 🛡️ THE FIX: Create an explicit Sub-Schema so Mongoose NEVER drops these fields!
+const portfolioItemSchema = new Schema({
+  stockSymbol: { type: String, required: true },
+  quantity: { type: Number, required: true, default: 0 },
+  averagePrice: { type: Number, required: true, default: 0 },
+});
+
 const userSchema = new Schema(
   {
     username: {
@@ -26,26 +33,20 @@ const userSchema = new Schema(
       index: true,
     },
     avatar: {
-      type: String, // We will use a Cloudinary URL later
+      type: String,
       required: true,
     },
     password: {
       type: String,
       required: [true, "Password is required"],
     },
-    // --- TRADEVERSE EXCLUSIVE FIELDS (Hitesh doesn't have these) ---
     walletBalance: {
       type: Number,
-      default: 0,
+      default: 100000,
     },
-    portfolio: [
-      {
-        stockSymbol: String,
-        quantity: Number,
-        averagePrice: Number,
-      },
-    ],
-    // ---------------------------------------------------------------
+    // 🛡️ Plug the Sub-Schema into the user
+    portfolio: [portfolioItemSchema],
+
     refreshToken: {
       type: String,
     },
