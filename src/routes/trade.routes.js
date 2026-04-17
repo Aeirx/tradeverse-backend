@@ -3,6 +3,7 @@ import mongoose from "mongoose";
 import { verifyJWT } from "../middlewares/auth.middleware.js";
 import { User } from "../models/user.model.js";
 import { createClient } from "redis";
+import YahooFinance from "yahoo-finance2";
 
 // --- GRACEFUL REDIS CONNECTION ---
 let redisClient;
@@ -20,7 +21,6 @@ let redisClient;
 })();
 
 // --- REAL WALL STREET CONNECTION ---
-import YahooFinance from "yahoo-finance2";
 const yahooFinance = new YahooFinance();
 
 const router = Router();
