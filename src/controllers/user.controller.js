@@ -26,21 +26,21 @@ const registerUser = asyncHandler(async (req, res) => {
   }
 
   // 4. Check for Avatar (Image)
-  const avatarLocalPath = req.files?.avatar[0]?.path;
-  if (!avatarLocalPath) {
-    throw new ApiError(400, "Avatar file is required");
-  }
+  let avatarUrl = "https://ui-avatars.com/api/?name=" + encodeURIComponent(fullName) + "&background=random";
+  const avatarLocalPath = req.files?.avatar?.[0]?.path;
 
-  // 5. Upload Avatar to Cloudinary
-  const avatar = await uploadOnCloudinary(avatarLocalPath);
-  if (!avatar) {
-    throw new ApiError(400, "Avatar file failed to upload on cloud");
+  if (avatarLocalPath) {
+    const uploadedAvatar = await uploadOnCloudinary(avatarLocalPath);
+    if (!uploadedAvatar) {
+      throw new ApiError(400, "Avatar file failed to upload on cloud");
+    }
+    avatarUrl = uploadedAvatar.url;
   }
 
   // 6. Create User Object (TradeVerse Specific: walletBalance is 0 by default)
   const user = await User.create({
     fullName,
-    avatar: avatar.url,
+    avatar: avatarUrl,
     email,
     password,
     username: username.toLowerCase(),
@@ -56,13 +56,12 @@ const registerUser = asyncHandler(async (req, res) => {
     throw new ApiError(500, "Something went wrong while registering the user");
   }
 
-  // 8. Send Response
   return res
     .status(201)
-    .json(new ApiResponse(200, createdUser, "User registered Successfully"));
+    .json(new ApiResponse(200, createdUser, "User registered successfully"));
 });
 
-// --- NEW CODE: Helper Function to create VIP Passes (Tokens) ---
+// Helper Function to create access and refresh tokens
 const generateAccessAndRefreshTokens = async (userId) => {
   try {
     const user = await User.findById(userId);
@@ -82,7 +81,7 @@ const generateAccessAndRefreshTokens = async (userId) => {
   }
 };
 
-// --- NEW CODE: The Actual Login Controller ---
+// Login Controller
 const loginUser = asyncHandler(async (req, res) => {
   // 1. Get data from user (Postman)
   const { email, username, password } = req.body;
@@ -107,12 +106,10 @@ const loginUser = asyncHandler(async (req, res) => {
     throw new ApiError(401, "Invalid user credentials");
   }
 
-  // 4. Give them their VIP Passes (Tokens)
   const { accessToken, refreshToken } = await generateAccessAndRefreshTokens(
     user._id
   );
 
-  // 5. Fetch the user safely (without password) to send back
   const loggedInUser = await User.findById(user._id).select(
     "-password -refreshToken"
   );
@@ -120,7 +117,8 @@ const loginUser = asyncHandler(async (req, res) => {
   // 6. Security settings for the Cookies
   const options = {
     httpOnly: true,
-    secure: false,
+    secure: true,
+    sameSite: "strict"
   };
 
   // 7. Send the response WITH the cookies
@@ -158,6 +156,7 @@ const logoutUser = asyncHandler(async (req, res) => {
   const options = {
     httpOnly: true,
     secure: true,
+    sameSite: "strict"
   };
 
   // 2. Clear the cookies from the user's browser

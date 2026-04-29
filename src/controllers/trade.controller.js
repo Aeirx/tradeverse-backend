@@ -4,6 +4,9 @@ import { ApiError } from "../utils/ApiError.js";
 import { ApiResponse } from "../utils/ApiResponse.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
 import { Transaction } from "../models/transaction.model.js";
+import YahooFinance from "yahoo-finance2";
+
+const yahooFinance = new YahooFinance();
 
 const buyStock = asyncHandler(async (req, res) => {
   const stockSymbol = (
@@ -14,7 +17,11 @@ const buyStock = asyncHandler(async (req, res) => {
   const quantity = Number(
     req.body.quantity || req.body.shares || req.body.tradeQuantity || 1
   );
-  const price = Number(req.body.price || 150);
+
+  // Fetch live price from Yahoo Finance
+  const quote = await yahooFinance.quote(stockSymbol);
+  const price = quote.regularMarketPrice;
+  if (!price) throw new ApiError(400, "Could not fetch live price for " + stockSymbol);
 
   const totalCost = quantity * price;
   const session = await mongoose.startSession();
@@ -78,7 +85,7 @@ const buyStock = asyncHandler(async (req, res) => {
       );
   } catch (error) {
     await session.abortTransaction();
-    throw new ApiError(400, error?.message || "Trade failed!");
+    throw new ApiError(400, "Transaction failed. Please try again.");
   } finally {
     session.endSession();
   }
@@ -91,7 +98,11 @@ const sellStock = asyncHandler(async (req, res) => {
     "UNKNOWN"
   ).toUpperCase();
   const sharesToSell = Number(req.body.quantity || req.body.shares || 1);
-  const price = Number(req.body.price || 150);
+
+  // Fetch live price from Yahoo Finance
+  const quote = await yahooFinance.quote(stockSymbol);
+  const price = quote.regularMarketPrice;
+  if (!price) throw new ApiError(400, "Could not fetch live price for " + stockSymbol);
 
   const earnings = sharesToSell * price;
   const session = await mongoose.startSession();
@@ -160,7 +171,7 @@ const sellStock = asyncHandler(async (req, res) => {
       );
   } catch (error) {
     await session.abortTransaction();
-    throw new ApiError(400, error?.message || "Trade failed!");
+    throw new ApiError(400, "Transaction failed. Please try again.");
   } finally {
     session.endSession();
   }
