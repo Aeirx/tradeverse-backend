@@ -4,19 +4,23 @@ import { User } from "../models/user.model.js";
 import { uploadOnCloudinary } from "../utils/cloudinary.js";
 import { ApiResponse } from "../utils/ApiResponse.js";
 import { Transaction } from "../models/transaction.model.js";
+import jwt from "jsonwebtoken";
+
+const cookieOptions = {
+  httpOnly: true,
+  secure: process.env.NODE_ENV === "production",
+  sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
+};
 
 const registerUser = asyncHandler(async (req, res) => {
-  // 1. Get user details from frontend (Postman)
   const { fullName, email, username, password } = req.body;
 
-  // 2. Validation - check if fields are not empty
   if (
     [fullName, email, username, password].some((field) => field?.trim() === "")
   ) {
     throw new ApiError(400, "All fields are required");
   }
 
-  // 3. Check if user already exists
   const existedUser = await User.findOne({
     $or: [{ username }, { email }],
   });
@@ -25,7 +29,6 @@ const registerUser = asyncHandler(async (req, res) => {
     throw new ApiError(409, "User with email or username already exists");
   }
 
-  // 4. Check for Avatar (Image)
   let avatarUrl = "https://ui-avatars.com/api/?name=" + encodeURIComponent(fullName) + "&background=random";
   const avatarLocalPath = req.files?.avatar?.[0]?.path;
 
@@ -37,19 +40,16 @@ const registerUser = asyncHandler(async (req, res) => {
     avatarUrl = uploadedAvatar.url;
   }
 
-  // 6. Create User Object (TradeVerse Specific: walletBalance is 0 by default)
   const user = await User.create({
     fullName,
     avatar: avatarUrl,
     email,
     password,
     username: username.toLowerCase(),
-    // walletBalance and portfolio are set to default automatically by your Model
   });
 
-  // 7. Check if user creation worked
   const createdUser = await User.findById(user._id).select(
-    "-password -refreshToken" // Don't send the password back to the user!
+    "-password -refreshToken"
   );
 
   if (!createdUser) {
@@ -61,14 +61,12 @@ const registerUser = asyncHandler(async (req, res) => {
     .json(new ApiResponse(200, createdUser, "User registered successfully"));
 });
 
-// Helper Function to create access and refresh tokens
 const generateAccessAndRefreshTokens = async (userId) => {
   try {
     const user = await User.findById(userId);
     const accessToken = user.generateAccessToken();
     const refreshToken = user.generateRefreshToken();
 
-    // Save the refresh token to the database
     user.refreshToken = refreshToken;
     await user.save({ validateBeforeSave: false });
 
@@ -81,16 +79,13 @@ const generateAccessAndRefreshTokens = async (userId) => {
   }
 };
 
-// Login Controller
 const loginUser = asyncHandler(async (req, res) => {
-  // 1. Get data from user (Postman)
   const { email, username, password } = req.body;
 
   if (!username && !email) {
     throw new ApiError(400, "Username or email is required");
   }
 
-  // 2. Find the user in the database
   const user = await User.findOne({
     $or: [{ username }, { email }],
   });
@@ -99,7 +94,6 @@ const loginUser = asyncHandler(async (req, res) => {
     throw new ApiError(404, "User does not exist");
   }
 
-  // 3. Check if the password matches the hashed password
   const isPasswordValid = await user.isPasswordCorrect(password);
 
   if (!isPasswordValid) {
@@ -114,25 +108,15 @@ const loginUser = asyncHandler(async (req, res) => {
     "-password -refreshToken"
   );
 
-  // 6. Security settings for the Cookies
-  const options = {
-    httpOnly: true,
-    secure: true,
-    sameSite: "strict"
-  };
-
-  // 7. Send the response WITH the cookies
   return res
     .status(200)
-    .cookie("accessToken", accessToken, options)
-    .cookie("refreshToken", refreshToken, options)
+    .cookie("accessToken", accessToken, cookieOptions)
+    .cookie("refreshToken", refreshToken, cookieOptions)
     .json(
       new ApiResponse(
         200,
         {
           user: loggedInUser,
-          accessToken,
-          refreshToken,
         },
         "User logged In Successfully"
       )
@@ -140,9 +124,8 @@ const loginUser = asyncHandler(async (req, res) => {
 });
 
 const logoutUser = asyncHandler(async (req, res) => {
-  // 1. Remove the refresh token from the database
   await User.findByIdAndUpdate(
-    req.user._id, // We have access to req.user because of our Bouncer!
+    req.user._id,
     {
       $unset: {
         refreshToken: 1,
@@ -153,46 +136,34 @@ const logoutUser = asyncHandler(async (req, res) => {
     }
   );
 
-  const options = {
-    httpOnly: true,
-    secure: true,
-    sameSite: "strict"
-  };
-
-  // 2. Clear the cookies from the user's browser
   return res
     .status(200)
-    .clearCookie("accessToken", options)
-    .clearCookie("refreshToken", options)
+    .clearCookie("accessToken", cookieOptions)
+    .clearCookie("refreshToken", cookieOptions)
     .json(new ApiResponse(200, {}, "User logged out successfully"));
 });
 
 const addMoneyToWallet = asyncHandler(async (req, res) => {
-  // 1. Get the amount the user wants to add from the request body
   const { amount } = req.body;
 
-  // 2. Security check: Make sure it's a valid positive number
   if (!amount || isNaN(amount) || Number(amount) <= 0) {
     throw new ApiError(400, "Please provide a valid positive amount.");
   }
 
-  // 3. Find the user and add the money to their walletBalance
   const updatedUser = await User.findByIdAndUpdate(
-    req.user._id, // We know who they are because of the Bouncer!
+    req.user._id,
     {
-      $inc: { walletBalance: Number(amount) }, // $inc automatically adds to the existing number
+      $inc: { walletBalance: Number(amount) },
     },
-    { new: true } // Return the updated user document
-  ).select("-password -refreshToken"); // Don't send back sensitive info
+    { new: true }
+  ).select("-password -refreshToken");
 
-  // --- PRINT RECEIPT ---
   await Transaction.create({
     user: req.user._id,
     type: "DEPOSIT",
     totalAmount: Number(amount),
   });
 
-  // 4. Send the success response
   return res
     .status(200)
     .json(
@@ -204,4 +175,45 @@ const addMoneyToWallet = asyncHandler(async (req, res) => {
     );
 });
 
-export { registerUser, loginUser, logoutUser, addMoneyToWallet };
+const refreshAccessToken = asyncHandler(async (req, res) => {
+  const incomingRefreshToken = req.cookies.refreshToken;
+
+  if (!incomingRefreshToken) {
+    throw new ApiError(401, "Unauthorized request");
+  }
+
+  try {
+    const decodedToken = jwt.verify(
+      incomingRefreshToken,
+      process.env.REFRESH_TOKEN_SECRET
+    );
+
+    const user = await User.findById(decodedToken?._id);
+
+    if (!user) {
+      throw new ApiError(401, "Invalid refresh token");
+    }
+
+    if (incomingRefreshToken !== user?.refreshToken) {
+      throw new ApiError(401, "Refresh token is expired or used");
+    }
+
+    const { accessToken, refreshToken: newRefreshToken } = await generateAccessAndRefreshTokens(user._id);
+
+    return res
+      .status(200)
+      .cookie("accessToken", accessToken, cookieOptions)
+      .cookie("refreshToken", newRefreshToken, cookieOptions)
+      .json(
+        new ApiResponse(
+          200,
+          { accessToken, refreshToken: newRefreshToken },
+          "Access token refreshed"
+        )
+      );
+  } catch (error) {
+    throw new ApiError(401, error?.message || "Invalid refresh token");
+  }
+});
+
+export { registerUser, loginUser, logoutUser, addMoneyToWallet, refreshAccessToken };

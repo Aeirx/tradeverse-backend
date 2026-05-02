@@ -7,7 +7,7 @@ const app = express();
 
 app.use(
   cors({
-    origin: "http://localhost:5173",
+    origin: process.env.CORS_ORIGIN || "http://localhost:5173",
     credentials: true,
   })
 );
@@ -26,5 +26,18 @@ import userRouter from "./routes/user.routes.js";
 app.use("/api/v1/users", userRouter);
 
 app.use("/api/v1/ai", aiRouter);
+
+// Global Error Handling Middleware
+app.use((err, req, res, next) => {
+  const statusCode = err.statusCode || 500;
+  const message = err.message || "Internal Server Error";
+  const errors = err.errors || [];
+  
+  res.status(statusCode).json({
+    success: false,
+    message,
+    errors
+  });
+});
 
 export { app };

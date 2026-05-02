@@ -2,7 +2,6 @@ import mongoose, { Schema } from "mongoose";
 import jwt from "jsonwebtoken";
 import bcrypt from "bcrypt";
 
-// 🛡️ THE FIX: Create an explicit Sub-Schema so Mongoose NEVER drops these fields!
 const portfolioItemSchema = new Schema({
   stockSymbol: { type: String, required: true },
   quantity: { type: Number, required: true, default: 0 },
@@ -44,7 +43,6 @@ const userSchema = new Schema(
       type: Number,
       default: 100000,
     },
-    // 🛡️ Plug the Sub-Schema into the user
     portfolio: [portfolioItemSchema],
 
     refreshToken: {

@@ -2,7 +2,7 @@ import { Router } from "express";
 import { verifyJWT } from "../middlewares/auth.middleware.js";
 import { createClient } from "redis";
 import YahooFinance from "yahoo-finance2";
-import { buyStock, sellStock } from "../controllers/trade.controller.js";
+import { buyStock, sellStock, getPortfolio, getHistory } from "../controllers/trade.controller.js";
 
 const yahooFinance = new YahooFinance();
 // Initialize Redis client
@@ -61,4 +61,9 @@ router.route("/buy").post(verifyJWT, buyStock);
 // Execute a sell order
 // Transaction is used to ensure consistency
 router.route("/sell").post(verifyJWT, sellStock);
+
+// Portfolio and History
+router.route("/portfolio").get(verifyJWT, getPortfolio);
+router.route("/history").get(verifyJWT, getHistory);
+
 export default router;

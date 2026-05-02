@@ -9,14 +9,15 @@ import YahooFinance from "yahoo-finance2";
 const yahooFinance = new YahooFinance();
 
 const buyStock = asyncHandler(async (req, res) => {
-  const stockSymbol = (
-    req.body.symbol ||
-    req.body.stockSymbol ||
-    "UNKNOWN"
-  ).toUpperCase();
-  const quantity = Number(
-    req.body.quantity || req.body.shares || req.body.tradeQuantity || 1
-  );
+  const stockSymbol = (req.body.symbol || req.body.stockSymbol || "").toUpperCase();
+  if (!stockSymbol || !/^[A-Z]+$/.test(stockSymbol)) {
+    throw new ApiError(400, "Invalid stock symbol format.");
+  }
+
+  const quantity = Number(req.body.quantity || req.body.shares || req.body.tradeQuantity);
+  if (!quantity || !Number.isInteger(quantity) || quantity <= 0) {
+    throw new ApiError(400, "Invalid trade quantity. Must be a positive integer.");
+  }
 
   // Fetch live price from Yahoo Finance
   const quote = await yahooFinance.quote(stockSymbol);
@@ -29,16 +30,21 @@ const buyStock = asyncHandler(async (req, res) => {
 
   try {
     const user = await User.findById(req.user._id).session(session);
-    if (user.walletBalance < totalCost) throw new Error("Insufficient funds.");
+    if (user.walletBalance < totalCost) throw new ApiError(400, "Insufficient funds.");
 
     const existingStock = user.portfolio.find(
       (item) => item.stockSymbol === stockSymbol
     );
 
     if (existingStock) {
+      const newQuantity = existingStock.quantity + quantity;
+      const currentAvg = existingStock.averagePrice || price; // fallback if it was missing
+      const newAveragePrice = ((existingStock.quantity * currentAvg) + (quantity * price)) / newQuantity;
+
       await User.updateOne(
         { _id: req.user._id, "portfolio.stockSymbol": stockSymbol },
         {
+          $set: { "portfolio.$.averagePrice": newAveragePrice },
           $inc: { "portfolio.$.quantity": quantity, walletBalance: -totalCost },
         },
         { session }
@@ -85,19 +91,22 @@ const buyStock = asyncHandler(async (req, res) => {
       );
   } catch (error) {
     await session.abortTransaction();
-    throw new ApiError(400, "Transaction failed. Please try again.");
+    throw new ApiError(error.statusCode || 400, error.message || "Transaction failed. Please try again.");
   } finally {
     session.endSession();
   }
 });
 
 const sellStock = asyncHandler(async (req, res) => {
-  const stockSymbol = (
-    req.body.symbol ||
-    req.body.stockSymbol ||
-    "UNKNOWN"
-  ).toUpperCase();
-  const sharesToSell = Number(req.body.quantity || req.body.shares || 1);
+  const stockSymbol = (req.body.symbol || req.body.stockSymbol || "").toUpperCase();
+  if (!stockSymbol || !/^[A-Z]+$/.test(stockSymbol)) {
+    throw new ApiError(400, "Invalid stock symbol format.");
+  }
+
+  const sharesToSell = Number(req.body.quantity || req.body.shares);
+  if (!sharesToSell || !Number.isInteger(sharesToSell) || sharesToSell <= 0) {
+    throw new ApiError(400, "Invalid trade quantity. Must be a positive integer.");
+  }
 
   // Fetch live price from Yahoo Finance
   const quote = await yahooFinance.quote(stockSymbol);
@@ -114,9 +123,9 @@ const sellStock = asyncHandler(async (req, res) => {
       (item) => item.stockSymbol === stockSymbol
     );
 
-    if (!ownedStock) throw new Error(`You don't own any ${stockSymbol}.`);
+    if (!ownedStock) throw new ApiError(400, `You don't own any ${stockSymbol}.`);
     if (ownedStock.quantity < sharesToSell)
-      throw new Error(`Not enough shares to sell.`);
+      throw new ApiError(400, `Not enough shares to sell.`);
 
     if (ownedStock.quantity === sharesToSell) {
       await User.updateOne(
@@ -171,7 +180,7 @@ const sellStock = asyncHandler(async (req, res) => {
       );
   } catch (error) {
     await session.abortTransaction();
-    throw new ApiError(400, "Transaction failed. Please try again.");
+    throw new ApiError(error.statusCode || 400, error.message || "Transaction failed. Please try again.");
   } finally {
     session.endSession();
   }

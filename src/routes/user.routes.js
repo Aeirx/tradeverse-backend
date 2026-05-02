@@ -4,6 +4,7 @@ import {
   loginUser,
   logoutUser,
   addMoneyToWallet,
+  refreshAccessToken,
 } from "../controllers/user.controller.js";
 import { verifyJWT } from "../middlewares/auth.middleware.js";
 import { upload } from "../middlewares/multer.middleware.js";
@@ -21,6 +22,8 @@ router.route("/register").post(
 );
 
 router.route("/login").post(loginUser);
+router.route("/refresh-token").post(refreshAccessToken);
+
 // Secured routes
 router.route("/logout").post(verifyJWT, logoutUser);
 router.route("/wallet/add").post(verifyJWT, addMoneyToWallet);
